@@ -14,6 +14,9 @@ use_frameworks! :linkage => :dynamic
 target 'FieldReportingApp' do
   config = use_native_modules!
 
+  # WatermelonDB needs the npm-vendored simdjson, not the CocoaPods one
+  pod 'simdjson', path: '../node_modules/@nozbe/simdjson', modular_headers: true
+
   use_react_native!(
     :path => config[:reactNativePath],
     # An absolute path to your application root.
@@ -27,5 +30,14 @@ target 'FieldReportingApp' do
       :mac_catalyst_enabled => false,
       # :ccache_enabled => true
     )
+
+    # react-native-image-picker uses UTType APIs but doesn't declare the frameworks,
+    # which breaks linking as a dynamic framework
+    installer.pods_project.targets.each do |target|
+      next unless target.name == 'react-native-image-picker'
+      target.build_configurations.each do |build_config|
+        build_config.build_settings['OTHER_LDFLAGS'] = ['$(inherited)', '-framework', 'UniformTypeIdentifiers', '-framework', 'MobileCoreServices']
+      end
+    end
   end
 end

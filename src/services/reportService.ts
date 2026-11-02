@@ -1,10 +1,15 @@
 import ImageResizer from '@bam.tech/react-native-image-resizer'
-import { getStorage, ref, putFile, getDownloadURL } from '@react-native-firebase/storage'
-import { getFirestore, collection, addDoc, serverTimestamp } from '@react-native-firebase/firestore'
+import { copyFile, DocumentDirectoryPath, exists, mkdir, stat, unlink } from '@dr.pogodin/react-native-fs'
 import { Asset } from 'react-native-image-picker'
+import { database, Report, ReportImage } from '../database'
 
 export const MAX_IMAGES = 5
 export const MAX_IMAGE_SIZE = 5 * 1024 * 1024 // 5 MB
+
+// Picker/resizer output lives in temp/cache dirs the OS may clear, so queued images are copied here
+const PENDING_DIR = `${DocumentDirectoryPath}/pending-uploads`
+
+export const pendingImagePath = (fileName: string) => `${PENDING_DIR}/${fileName}`
 
 // Progressively stronger [max dimension, JPEG quality] passes, tried until the image fits
 const COMPRESSION_STEPS: [number, number][] = [
@@ -35,20 +40,67 @@ const compressImage = async (asset: Asset): Promise<string> => {
   return result
 }
 
-const uploadImage = async (asset: Asset, reportId: string, index: number): Promise<string> => {
-  const fileUri = await compressImage(asset)
-  const storageRef = ref(getStorage(), `reports/${reportId}/image_${index}.jpg`)
-  await putFile(storageRef, fileUri, { contentType: 'image/jpeg' })
-  return getDownloadURL(storageRef)
+const persistImage = async (asset: Asset, fileName: string) => {
+  const source = decodeURIComponent((await compressImage(asset)).replace(/^file:\/\//, ''))
+  const destination = pendingImagePath(fileName)
+  await copyFile(source, destination)
+  const { size } = await stat(destination)
+  return { fileName, size }
 }
 
-export const uploadReport = async (description: string, images: Asset[]) => {
-  const reportId = `${Date.now()}`
-  const imageUrls = await Promise.all(images.map((image, index) => uploadImage(image, reportId, index)))
+const deleteFiles = (fileNames: string[]) =>
+  Promise.all(fileNames.map(async fileName => {
+    const path = pendingImagePath(fileName)
+    if (await exists(path)) {
+      await unlink(path)
+    }
+  }))
 
-  return addDoc(collection(getFirestore(), 'reports'), {
-    description: description.trim(),
-    images: imageUrls,
-    createdAt: serverTimestamp(),
+// Stores the report and its images on the device; the upload queue sends them to the cloud when online
+export const saveReportOffline = async (description: string, images: Asset[]) => {
+  await mkdir(PENDING_DIR)
+
+  const key = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+  const fileNames = images.map((_, index) => `${key}_${index}.jpg`)
+
+  let files: { fileName: string; size: number }[]
+  try {
+    files = await Promise.all(images.map((image, index) => persistImage(image, fileNames[index])))
+  } catch (error) {
+    await deleteFiles(fileNames).catch(() => undefined)
+    throw error
+  }
+
+  return database.write(async () => {
+    const report = database.get<Report>('reports').prepareCreate(record => {
+      record.description = description.trim()
+      record.imageCount = files.length
+      record.status = 'pending'
+      record.error = null
+      record.createdAt = new Date()
+    })
+    const imageRecords = files.map((file, index) =>
+      database.get<ReportImage>('report_images').prepareCreate(record => {
+        record.report.set(report)
+        record.position = index
+        record.fileName = file.fileName
+        record.size = file.size
+        record.remoteUrl = null
+      }),
+    )
+    await database.batch(report, ...imageRecords)
+    return report
   })
+}
+
+// Removes a report from the offline queue once it is safely on the cloud
+export const removeLocalReport = async (report: Report) => {
+  const images = await report.images.fetch()
+  await database.write(async () => {
+    await database.batch(
+      ...images.map(image => image.prepareDestroyPermanently()),
+      report.prepareDestroyPermanently(),
+    )
+  })
+  await deleteFiles(images.map(image => image.fileName)).catch(() => undefined)
 }

@@ -2,8 +2,9 @@ import React, { useState } from 'react'
 import { Alert, Image, Linking, PermissionsAndroid, Platform, ScrollView, TouchableOpacity } from 'react-native'
 import { Asset, ImagePickerResponse, launchCamera, launchImageLibrary } from 'react-native-image-picker'
 import { MaterialDesignIcons } from '@react-native-vector-icons/material-design-icons/static'
-import { AppButton, AppContainer, AppText, AppTextInput, AppView, ImagePickerModal } from '../../components'
-import { MAX_IMAGES, uploadReport } from '../../services/reportService'
+import { AppButton, AppContainer, AppText, AppTextInput, AppView, ImagePickerModal, NetworkBanner, PendingUploads } from '../../components'
+import { MAX_IMAGES, saveReportOffline } from '../../services/reportService'
+import { getUploadQueueState, processQueue } from '../../services/uploadQueue'
 import colors from '../../constants/colors'
 import styles from './style'
 
@@ -11,6 +12,7 @@ const Dashboard = () => {
     const [description, setDescription] = useState('')
     const [images, setImages] = useState<Asset[]>([])
     const [pickerVisible, setPickerVisible] = useState(false)
+    // True only while images are compressed and saved to the offline queue
     const [uploading, setUploading] = useState(false)
 
     const remaining = MAX_IMAGES - images.length
@@ -79,12 +81,15 @@ const Dashboard = () => {
 
         try {
             setUploading(true)
-            await uploadReport(description, images)
+            await saveReportOffline(description, images)
             setDescription('')
             setImages([])
-            Alert.alert('Success', 'Report uploaded successfully.')
+            processQueue()
+            if (!getUploadQueueState().isOnline) {
+                Alert.alert('Saved offline', 'No internet connection. The report will upload automatically when you are back online.')
+            }
         } catch (error) {
-            Alert.alert('Upload failed', error instanceof Error ? error.message : 'Something went wrong')
+            Alert.alert('Save failed', error instanceof Error ? error.message : 'Something went wrong')
         } finally {
             setUploading(false)
         }
@@ -92,6 +97,7 @@ const Dashboard = () => {
 
     return (
         <AppContainer>
+            <NetworkBanner />
             <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
                 <AppText style={styles.heading}>New Field Report</AppText>
 
@@ -131,6 +137,8 @@ const Dashboard = () => {
                     loading={uploading}
                     style={styles.uploadButton}
                 />
+
+                <PendingUploads />
             </ScrollView>
 
             <ImagePickerModal

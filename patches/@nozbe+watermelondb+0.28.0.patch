@@ -1,0 +1,95 @@
+diff --git a/node_modules/@nozbe/watermelondb/WatermelonDB.podspec b/node_modules/@nozbe/watermelondb/WatermelonDB.podspec
+index c9d8b09..b88bd97 100644
+--- a/node_modules/@nozbe/watermelondb/WatermelonDB.podspec
++++ b/node_modules/@nozbe/watermelondb/WatermelonDB.podspec
+@@ -30,14 +30,15 @@ Pod::Spec.new do |s|
+   # simdjson is annoyingly slow without compiler optimization, disable for debugging
+   s.compiler_flags = '-Os'
+ 
+-  s.dependency "React"
++  # Links React/jsi correctly for dynamic frameworks and prebuilt React Native core
++  if respond_to?(:install_modules_dependencies, true)
++    install_modules_dependencies(s)
++  else
++    s.dependency "React"
++  end
+ 
+   s.libraries = 'sqlite3'
+ 
+-  # NOTE: This dependency doesn't seem to be needed anymore (tested on RN 0.66, 0.71), file an issue
+-  # if this causes issues for you
+-  # s.dependency "React-jsi"
+-
+   # NOTE: NPM-vendored @nozbe/simdjson must be used, not the CocoaPods version
+   s.dependency "simdjson"
+ end
+diff --git a/node_modules/@nozbe/watermelondb/native/android/build.gradle b/node_modules/@nozbe/watermelondb/native/android/build.gradle
+index a45cfe0..2575599 100644
+--- a/node_modules/@nozbe/watermelondb/native/android/build.gradle
++++ b/node_modules/@nozbe/watermelondb/native/android/build.gradle
+@@ -26,6 +26,11 @@ android {
+ 
+     namespace "com.nozbe.watermelondb"
+ 
++    // AGP 8+ no longer generates BuildConfig for libraries by default
++    buildFeatures {
++        buildConfig true
++    }
++
+     defaultConfig {
+         minSdkVersion getExtOrIntegerDefault('minSdkVersion')
+         targetSdkVersion getExtOrIntegerDefault('targetSdkVersion')
+diff --git a/node_modules/@nozbe/watermelondb/native/ios/WatermelonDB/JSIInstaller.h b/node_modules/@nozbe/watermelondb/native/ios/WatermelonDB/JSIInstaller.h
+index c1b7efb..1c323a7 100644
+--- a/node_modules/@nozbe/watermelondb/native/ios/WatermelonDB/JSIInstaller.h
++++ b/node_modules/@nozbe/watermelondb/native/ios/WatermelonDB/JSIInstaller.h
+@@ -7,7 +7,8 @@ extern "C"
+ {
+ #endif
+ 
+-void installWatermelonJSI(RCTCxxBridge *bridge);
++// Accepts RCTCxxBridge (old arch) or RCTBridgeProxy (bridgeless); both respond to -runtime
++void installWatermelonJSI(id bridge);
+ void watermelondbProvideSyncJson(int id, NSData *json, NSError **errorPtr);
+ 
+ #ifdef __cplusplus
+diff --git a/node_modules/@nozbe/watermelondb/native/ios/WatermelonDB/JSIInstaller.mm b/node_modules/@nozbe/watermelondb/native/ios/WatermelonDB/JSIInstaller.mm
+index d508249..f145d99 100644
+--- a/node_modules/@nozbe/watermelondb/native/ios/WatermelonDB/JSIInstaller.mm
++++ b/node_modules/@nozbe/watermelondb/native/ios/WatermelonDB/JSIInstaller.mm
+@@ -1,12 +1,18 @@
+ #import "JSIInstaller.h"
+ #import "Database.h"
++#import <objc/message.h>
+ 
+-extern "C" void installWatermelonJSI(RCTCxxBridge *bridge) {
+-    if (bridge.runtime == nullptr) {
++extern "C" void installWatermelonJSI(id bridge) {
++    SEL runtimeSelector = NSSelectorFromString(@"runtime");
++    if (bridge == nil || ![bridge respondsToSelector:runtimeSelector]) {
+         return;
+     }
+ 
+-    jsi::Runtime *runtime = (jsi::Runtime*) bridge.runtime;
+-    assert(runtime != nullptr);
++    void *rawRuntime = ((void *(*)(id, SEL))objc_msgSend)(bridge, runtimeSelector);
++    if (rawRuntime == nullptr) {
++        return;
++    }
++
++    jsi::Runtime *runtime = (jsi::Runtime*) rawRuntime;
+     watermelondb::Database::install(runtime);
+ }
+diff --git a/node_modules/@nozbe/watermelondb/native/ios/WatermelonDB/objc/WMDatabaseBridge.m b/node_modules/@nozbe/watermelondb/native/ios/WatermelonDB/objc/WMDatabaseBridge.m
+index 8a3ab35..3eb3ce4 100644
+--- a/node_modules/@nozbe/watermelondb/native/ios/WatermelonDB/objc/WMDatabaseBridge.m
++++ b/node_modules/@nozbe/watermelondb/native/ios/WatermelonDB/objc/WMDatabaseBridge.m
+@@ -196,7 +196,7 @@ + (BOOL) requiresMainQueueSetup
+ 
+ RCT_EXPORT_BLOCKING_SYNCHRONOUS_METHOD(initializeJSI)
+ {
+-    __block RCTCxxBridge *bridge = (RCTCxxBridge *) _bridge;
++    __block id bridge = _bridge;
+     dispatch_sync([self methodQueue], ^{
+         installWatermelonJSI(bridge);
+     });

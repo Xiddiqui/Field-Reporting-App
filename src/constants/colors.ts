@@ -12,6 +12,7 @@ const colors = {
   border: '#E0D6F5',
   error: '#D93025',
   success: '#1E8E3E',
+  warning: '#E37400',
 } as const
 
 export default colors
