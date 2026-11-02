@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "556616210545",
+    "project_id": "field-reporting-app-fcbbf",
+    "storage_bucket": "field-reporting-app-fcbbf.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:556616210545:android:8b84e2ef5435ec880d63d0",
+        "android_client_info": {
+          "package_name": "com.fieldreportingapp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCRaYUsNVFG6EkLryZy6zdy59gvjE1TtP0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
