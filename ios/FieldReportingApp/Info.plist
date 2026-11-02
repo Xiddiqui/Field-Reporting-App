@@ -34,6 +34,10 @@
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
+	<key>NSCameraUsageDescription</key>
+	<string>Camera access is needed to take photos for your field report.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Photo library access is needed to attach photos to your field report.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string></string>
 	<key>RCTNewArchEnabled</key>
