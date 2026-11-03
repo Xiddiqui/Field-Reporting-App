@@ -1,154 +1,105 @@
-import React, { useState } from 'react'
-import { Alert, Image, Linking, PermissionsAndroid, Platform, ScrollView, TouchableOpacity } from 'react-native'
-import { Asset, ImagePickerResponse, launchCamera, launchImageLibrary } from 'react-native-image-picker'
+import React from 'react'
+import { ScrollView } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { MaterialDesignIcons } from '@react-native-vector-icons/material-design-icons/static'
-import { AppButton, AppContainer, AppText, AppTextInput, AppView, ImagePickerModal, NetworkBanner, PendingUploads } from '../../components'
-import { MAX_IMAGES, saveReportOffline } from '../../services/reportService'
-import { getUploadQueueState, processQueue } from '../../services/uploadQueue'
+import { AppButton, AppContainer, AppText, AppView, NetworkBanner, PendingUploads } from '../../components'
+import { usePendingReports, useUploadQueue } from '../../hooks/useUploadQueue'
+import { RootStackScreenProps, ROUTES } from '../../navigation/types'
 import colors from '../../constants/colors'
 import styles from './style'
 
-const Dashboard = () => {
-    const [description, setDescription] = useState('')
-    const [images, setImages] = useState<Asset[]>([])
-    const [pickerVisible, setPickerVisible] = useState(false)
-    // True only while images are compressed and saved to the offline queue
-    const [uploading, setUploading] = useState(false)
+type StatCardProps = {
+  icon: React.ComponentProps<typeof MaterialDesignIcons>['name']
+  label: string
+  value: string | number
+  color: string
+}
 
-    const remaining = MAX_IMAGES - images.length
+const StatCard = ({ icon, label, value, color }: StatCardProps) => (
+  <AppView flex style={styles.statCard}>
+    <AppView center style={[styles.statIcon, { backgroundColor: `${color}1A` }]}>
+      <MaterialDesignIcons name={icon} size={20} color={color} />
+    </AppView>
+    <AppText style={styles.statValue}>{value}</AppText>
+    <AppText style={styles.statLabel}>{label}</AppText>
+  </AppView>
+)
 
-    const handlePickerResponse = (response: ImagePickerResponse) => {
-        if (response.didCancel) {
-            return
-        }
-        if (response.errorCode) {
-            Alert.alert('Error', response.errorMessage ?? 'Unable to pick image')
-            return
-        }
-        const assets = (response.assets ?? []).filter(asset => !!asset.uri)
-        setImages(prev => [...prev, ...assets].slice(0, MAX_IMAGES))
-    }
+const Dashboard = ({ navigation }: RootStackScreenProps<typeof ROUTES.DASHBOARD>) => {
+  const insets = useSafeAreaInsets()
+  const reports = usePendingReports()
+  const { isOnline, isSyncing } = useUploadQueue()
 
-    // CAMERA is declared in the manifest, so Android requires it granted at runtime before launching the camera
-    const requestCameraPermission = async () => {
-        if (Platform.OS !== 'android') {
-            return true
-        }
-        const result = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.CAMERA)
-        if (result === PermissionsAndroid.RESULTS.NEVER_ASK_AGAIN) {
-            Alert.alert('Camera permission', 'Please enable camera access in Settings to take photos.', [
-                { text: 'Cancel', style: 'cancel' },
-                { text: 'Open Settings', onPress: () => Linking.openSettings() },
-            ])
-        }
-        return result === PermissionsAndroid.RESULTS.GRANTED
-    }
+  const pendingCount = reports.filter(report => report.status === 'pending').length
+  const failedCount = reports.filter(report => report.status === 'failed').length
+  const today = new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })
 
-    const onCamera = async () => {
-        setPickerVisible(false)
-        if (!(await requestCameraPermission())) {
-            return
-        }
-        handlePickerResponse(await launchCamera({ mediaType: 'photo', saveToPhotos: false }))
-    }
+  return (
+    <AppContainer edges={['left', 'right']}>
+      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+        <AppView style={[styles.header, { paddingTop: insets.top + 24 }]}>
+          <AppView row style={styles.headerTop}>
+            <AppView flex>
+              <AppText style={styles.date}>{today}</AppText>
+              <AppText style={styles.welcome}>Welcome</AppText>
+              <AppText style={styles.subtitle}>Capture and submit your field reports</AppText>
+            </AppView>
+            <AppView center style={styles.avatar}>
+              <MaterialDesignIcons name="clipboard-text-outline" size={26} color={colors.white} />
+            </AppView>
+          </AppView>
 
-    const onGallery = async () => {
-        setPickerVisible(false)
-        handlePickerResponse(await launchImageLibrary({ mediaType: 'photo', selectionLimit: remaining }))
-    }
+          <AppView row style={styles.connection}>
+            <AppView style={[styles.dot, { backgroundColor: isOnline ? colors.success : colors.warning }]} />
+            <AppText style={styles.connectionText}>
+              {isOnline ? (isSyncing ? 'Online · Syncing' : 'Online') : 'Offline mode'}
+            </AppText>
+          </AppView>
+        </AppView>
 
-    const onAddImages = () => {
-        if (remaining <= 0) {
-            Alert.alert('Limit reached', `You can select up to ${MAX_IMAGES} images.`)
-            return
-        }
-        setPickerVisible(true)
-    }
+        <AppView style={styles.body}>
+          <NetworkBanner />
 
-    const onRemoveImage = (uri?: string) => {
-        setImages(prev => prev.filter(image => image.uri !== uri))
-    }
-
-    const onUploadReport = async () => {
-        if (!description.trim()) {
-            Alert.alert('Missing description', 'Please enter a description for the report.')
-            return
-        }
-        if (images.length === 0) {
-            Alert.alert('No images', 'Please add at least one image.')
-            return
-        }
-
-        try {
-            setUploading(true)
-            await saveReportOffline(description, images)
-            setDescription('')
-            setImages([])
-            processQueue()
-            if (!getUploadQueueState().isOnline) {
-                Alert.alert('Saved offline', 'No internet connection. The report will upload automatically when you are back online.')
-            }
-        } catch (error) {
-            Alert.alert('Save failed', error instanceof Error ? error.message : 'Something went wrong')
-        } finally {
-            setUploading(false)
-        }
-    }
-
-    return (
-        <AppContainer>
-            <NetworkBanner />
-            <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-                <AppText style={styles.heading}>New Field Report</AppText>
-
-                <AppTextInput
-                    label="Description"
-                    placeholder="Describe what you observed..."
-                    value={description}
-                    onChangeText={setDescription}
-                    multiline
-                    editable={!uploading}
-                />
-
-                <AppText style={styles.imagesLabel}>
-                    Images ({images.length}/{MAX_IMAGES})
+          <AppView style={styles.actionCard}>
+            <AppView row style={styles.actionHeader}>
+              <AppView center style={styles.actionIcon}>
+                <MaterialDesignIcons name="file-document-edit-outline" size={28} color={colors.primary} />
+              </AppView>
+              <AppView flex>
+                <AppText style={styles.actionTitle}>New Field Report</AppText>
+                <AppText style={styles.actionText}>
+                  Add a description and photos. Reports are saved offline and sync automatically.
                 </AppText>
-                <AppView row style={styles.imageGrid}>
-                    {images.map(image => (
-                        <AppView key={image.uri} style={styles.imageWrapper}>
-                            <Image source={{ uri: image.uri }} style={styles.image} />
-                            {!uploading && (
-                                <TouchableOpacity style={styles.removeButton} onPress={() => onRemoveImage(image.uri)}>
-                                    <MaterialDesignIcons name="close" size={16} color={colors.white} />
-                                </TouchableOpacity>
-                            )}
-                        </AppView>
-                    ))}
-                    {remaining > 0 && !uploading && (
-                        <TouchableOpacity style={[styles.imageWrapper, styles.addImage]} onPress={onAddImages}>
-                            <MaterialDesignIcons name="camera-plus" size={28} color={colors.primary} />
-                        </TouchableOpacity>
-                    )}
-                </AppView>
+              </AppView>
+            </AppView>
+            <AppButton title="Upload Report" onPress={() => navigation.navigate(ROUTES.UPLOAD_REPORT)} />
+          </AppView>
 
-                <AppButton
-                    title="Upload Report"
-                    onPress={onUploadReport}
-                    loading={uploading}
-                    style={styles.uploadButton}
-                />
-
-                <PendingUploads />
-            </ScrollView>
-
-            <ImagePickerModal
-                visible={pickerVisible}
-                onClose={() => setPickerVisible(false)}
-                onCamera={onCamera}
-                onGallery={onGallery}
+          <AppText style={styles.sectionTitle}>Overview</AppText>
+          <AppView row style={styles.statsRow}>
+            <StatCard icon="clock-outline" label="Pending" value={pendingCount} color={colors.primary} />
+            <StatCard icon="alert-circle-outline" label="Failed" value={failedCount} color={colors.error} />
+            <StatCard
+              icon={isOnline ? 'cloud-check-outline' : 'cloud-off-outline'}
+              label="Status"
+              value={isOnline ? 'Online' : 'Offline'}
+              color={isOnline ? colors.success : colors.warning}
             />
-        </AppContainer>
-    )
+          </AppView>
+
+          {reports.length === 0 ? (
+            <AppView center style={styles.emptyState}>
+              <MaterialDesignIcons name="check-circle-outline" size={36} color={colors.success} />
+              <AppText style={styles.emptyTitle}>All caught up</AppText>
+              <AppText style={styles.emptyText}>Every report has been uploaded.</AppText>
+            </AppView>
+          ) : (
+            <PendingUploads />
+          )}
+        </AppView>
+      </ScrollView>
+    </AppContainer>
+  )
 }
 
 export default Dashboard

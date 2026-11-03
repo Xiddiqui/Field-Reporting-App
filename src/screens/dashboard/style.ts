@@ -1,56 +1,149 @@
 import { StyleSheet } from 'react-native'
 import colors from '../../constants/colors'
 
+const cardShadow = {
+  shadowColor: colors.primaryDark,
+  shadowOffset: { width: 0, height: 4 },
+  shadowOpacity: 0.08,
+  shadowRadius: 12,
+  elevation: 3,
+}
+
 const styles = StyleSheet.create({
-    container: {
-        padding: 16,
-    },
-    heading: {
-        fontSize: 20,
-        fontWeight: '700',
-        marginBottom: 16,
-    },
-    imagesLabel: {
-        marginTop: 20,
-        marginBottom: 8,
-        fontWeight: '600',
-    },
-    imageGrid: {
-        flexWrap: 'wrap',
-        gap: 10,
-    },
-    imageWrapper: {
-        width: 96,
-        height: 96,
-        borderRadius: 10,
-        overflow: 'hidden',
-    },
-    image: {
-        width: '100%',
-        height: '100%',
-    },
-    removeButton: {
-        position: 'absolute',
-        top: 4,
-        right: 4,
-        width: 22,
-        height: 22,
-        borderRadius: 11,
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    },
-    addImage: {
-        alignItems: 'center',
-        justifyContent: 'center',
-        borderWidth: 1,
-        borderStyle: 'dashed',
-        borderColor: colors.primary,
-        backgroundColor: colors.secondaryLight,
-    },
-    uploadButton: {
-        marginTop: 24,
-    },
+  scroll: {
+    paddingBottom: 32,
+    backgroundColor: colors.secondaryLight,
+    flexGrow: 1,
+  },
+  header: {
+    paddingHorizontal: 20,
+    paddingBottom: 56,
+    backgroundColor: colors.primary,
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
+  },
+  headerTop: {
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  date: {
+    fontSize: 13,
+    color: colors.border,
+  },
+  welcome: {
+    marginTop: 4,
+    fontSize: 30,
+    fontWeight: '700',
+    color: colors.white,
+  },
+  subtitle: {
+    marginTop: 4,
+    fontSize: 14,
+    color: colors.secondaryLight,
+  },
+  avatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255, 255, 255, 0.18)',
+  },
+  connection: {
+    alignSelf: 'flex-start',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+  },
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  connectionText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.white,
+  },
+  body: {
+    marginTop: -36,
+    paddingHorizontal: 16,
+  },
+  actionCard: {
+    padding: 20,
+    borderRadius: 18,
+    backgroundColor: colors.white,
+    ...cardShadow,
+  },
+  actionHeader: {
+    gap: 14,
+    marginBottom: 18,
+  },
+  actionIcon: {
+    width: 52,
+    height: 52,
+    borderRadius: 14,
+    backgroundColor: colors.secondaryLight,
+  },
+  actionTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+  },
+  actionText: {
+    marginTop: 4,
+    fontSize: 13,
+    lineHeight: 19,
+    color: colors.textLight,
+  },
+  sectionTitle: {
+    marginTop: 28,
+    marginBottom: 12,
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  statsRow: {
+    gap: 12,
+  },
+  statCard: {
+    padding: 14,
+    borderRadius: 16,
+    backgroundColor: colors.white,
+    ...cardShadow,
+  },
+  statIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    marginBottom: 10,
+  },
+  statValue: {
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  statLabel: {
+    marginTop: 2,
+    fontSize: 12,
+    color: colors.textLight,
+  },
+  emptyState: {
+    marginTop: 20,
+    padding: 24,
+    borderRadius: 16,
+    backgroundColor: colors.white,
+    ...cardShadow,
+  },
+  emptyTitle: {
+    marginTop: 8,
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  emptyText: {
+    marginTop: 4,
+    fontSize: 13,
+    color: colors.textLight,
+  },
 })
 
 export default styles

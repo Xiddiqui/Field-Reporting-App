@@ -1,4 +1,4 @@
-import Dashboard from "./src/screens/dashboard";
+import AppNavigator from "./src/navigation";
 
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import React, { useEffect } from 'react'
@@ -10,7 +10,7 @@ const App = () => {
 
   return (
     <SafeAreaProvider>
-      <Dashboard/>
+      <AppNavigator/>
     </SafeAreaProvider>
   )
 }
