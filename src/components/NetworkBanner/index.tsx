@@ -3,13 +3,13 @@ import { MaterialDesignIcons } from '@react-native-vector-icons/material-design-
 import AppText from '../AppText'
 import AppView from '../AppView'
 import colors from '../../constants/colors'
-import { useUploadQueue } from '../../hooks/useUploadQueue'
+import { useDeliveryState } from '../../hooks/useDelivery'
 import styles from './style'
 
 const BACK_ONLINE_DURATION = 3000
 
 const NetworkBanner = () => {
-  const { isOnline } = useUploadQueue()
+  const { isOnline } = useDeliveryState()
   const [showBackOnline, setShowBackOnline] = useState(false)
   const wasOnline = useRef(isOnline)
 
@@ -34,7 +34,7 @@ const NetworkBanner = () => {
     <AppView row style={[styles.banner, isOnline ? styles.online : styles.offline]}>
       <MaterialDesignIcons name={isOnline ? 'wifi' : 'wifi-off'} size={18} color={colors.white} />
       <AppText style={styles.text}>
-        {isOnline ? 'Back online — syncing reports' : 'You are offline. Reports will upload when connected.'}
+        {isOnline ? 'Network is back — resuming uploads' : 'No network. Reports are saved on this device and upload when connected.'}
       </AppText>
     </AppView>
   )
