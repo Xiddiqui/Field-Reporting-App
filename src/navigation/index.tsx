@@ -3,6 +3,8 @@ import { NavigationContainer, DefaultTheme, Theme } from '@react-navigation/nati
 import { createNativeStackNavigator } from '@react-navigation/native-stack'
 import Dashboard from '../screens/dashboard'
 import UploadReport from '../screens/uploadReport'
+import ReviewScreen from '../features/review/ReviewScreen'
+import DevToolsScreen from '../features/devtools/DevToolsScreen'
 import colors from '../constants/colors'
 import { RootStackParamList, ROUTES } from './types'
 
@@ -33,7 +35,11 @@ const AppNavigator = () => {
         }}
       >
         <Stack.Screen name={ROUTES.DASHBOARD} component={Dashboard} options={{ headerShown: false, statusBarStyle: 'light' }} />
-        <Stack.Screen name={ROUTES.UPLOAD_REPORT} component={UploadReport} options={{ title: 'Upload Report', statusBarStyle: 'dark' }} />
+        <Stack.Screen name={ROUTES.UPLOAD_REPORT} component={UploadReport} options={{ title: 'New Report', statusBarStyle: 'dark' }} />
+        <Stack.Screen name={ROUTES.REVIEW} component={ReviewScreen} options={{ title: 'Server Reports', statusBarStyle: 'dark' }} />
+        {__DEV__ && (
+          <Stack.Screen name={ROUTES.DEV_TOOLS} component={DevToolsScreen} options={{ title: 'Failure Simulation (dev)', statusBarStyle: 'dark' }} />
+        )}
       </Stack.Navigator>
     </NavigationContainer>
   )

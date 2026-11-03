@@ -1,0 +1,19 @@
+rules_version = '2';
+
+// Image uploads: deterministic object key per (report, image), JPEG only, at most 5 MiB.
+// Mirrors src/delivery/limits.ts. Once the report document exists (finalized), its images
+// can no longer be replaced.
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /reports/{reportId}/{fileName} {
+      allow read: if true;
+      allow create, update: if reportId.matches('^[0-9a-f-]{36}$')
+        && fileName.matches('^[0-9a-f-]{36}[.]jpg$')
+        && request.resource.size > 0
+        && request.resource.size <= 5 * 1024 * 1024
+        && request.resource.contentType == 'image/jpeg'
+        && !firestore.exists(/databases/(default)/documents/reports/$(reportId));
+      allow delete: if false;
+    }
+  }
+}
