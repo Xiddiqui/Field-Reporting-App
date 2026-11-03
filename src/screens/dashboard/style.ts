@@ -144,6 +144,38 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: colors.textLight,
   },
+  linksRow: {
+    gap: 10,
+    marginTop: 14,
+  },
+  linkButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    minHeight: 48,
+    borderRadius: 12,
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  linkText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.primary,
+  },
+  devLink: {
+    alignSelf: 'center',
+    minHeight: 44,
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+  },
+  devLinkText: {
+    fontSize: 12,
+    color: colors.warning,
+    textDecorationLine: 'underline',
+  },
 })
 
 export default styles
