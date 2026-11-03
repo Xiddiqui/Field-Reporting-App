@@ -3,38 +3,61 @@ import colors from '../../constants/colors'
 
 const styles = StyleSheet.create({
   container: {
-    marginTop: 28,
-  },
-  heading: {
-    fontWeight: '600',
-    marginBottom: 8,
+    marginTop: 8,
   },
   item: {
     padding: 12,
     marginBottom: 10,
-    borderRadius: 10,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.white,
   },
   itemHeader: {
-    alignItems: 'center',
-    gap: 10,
+    gap: 12,
+  },
+  thumbnail: {
+    width: 56,
+    height: 56,
+    borderRadius: 8,
+    backgroundColor: colors.secondaryLight,
   },
   description: {
     fontWeight: '600',
   },
-  status: {
+  meta: {
     marginTop: 2,
     fontSize: 12,
     color: colors.textLight,
   },
-  statusError: {
+  statusRow: {
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 6,
+  },
+  statusLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  detail: {
+    marginTop: 2,
+    fontSize: 12,
+    color: colors.textLight,
+  },
+  detailError: {
     color: colors.error,
   },
+  progress: {
+    marginTop: 10,
+  },
   retry: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-end',
+    gap: 4,
+    minHeight: 44,
+    marginTop: 8,
+    paddingHorizontal: 14,
     borderRadius: 8,
     backgroundColor: colors.secondaryLight,
   },
@@ -42,9 +65,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: colors.primary,
-  },
-  progress: {
-    marginTop: 10,
   },
 })
 
