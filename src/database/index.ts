@@ -2,11 +2,13 @@ import { Database } from '@nozbe/watermelondb'
 import SQLiteAdapter from '@nozbe/watermelondb/adapters/sqlite'
 import { Platform } from 'react-native'
 import schema from './schema'
+import migrations from './migrations'
 import Report from './models/Report'
 import ReportImage from './models/ReportImage'
 
 const adapter = new SQLiteAdapter({
   schema,
+  migrations,
   dbName: 'fieldReporting',
   // JSI is auto-installed on iOS; Android uses the async bridge adapter, which needs no extra native setup
   jsi: Platform.OS === 'ios',
