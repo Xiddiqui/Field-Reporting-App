@@ -2,8 +2,11 @@ import React from 'react'
 import { ScrollView } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { MaterialDesignIcons } from '@react-native-vector-icons/material-design-icons/static'
-import { AppButton, AppContainer, AppText, AppView, NetworkBanner, PendingUploads } from '../../components'
-import { usePendingReports, useUploadQueue } from '../../hooks/useUploadQueue'
+import { TouchableOpacity } from 'react-native'
+import { AppButton, AppContainer, AppText, AppView, NetworkBanner } from '../../components'
+import { useDeliveryState, useOutbox } from '../../hooks/useDelivery'
+import Outbox from '../../features/outbox/Outbox'
+import { confirmResetLocalData } from '../../features/reset/resetLocalData'
 import { RootStackScreenProps, ROUTES } from '../../navigation/types'
 import colors from '../../constants/colors'
 import styles from './style'
@@ -27,11 +30,13 @@ const StatCard = ({ icon, label, value, color }: StatCardProps) => (
 
 const Dashboard = ({ navigation }: RootStackScreenProps<typeof ROUTES.DASHBOARD>) => {
   const insets = useSafeAreaInsets()
-  const reports = usePendingReports()
-  const { isOnline, isSyncing } = useUploadQueue()
+  const items = useOutbox()
+  const { isOnline, isRunning } = useDeliveryState()
 
-  const pendingCount = reports.filter(report => report.status === 'pending').length
-  const failedCount = reports.filter(report => report.status === 'failed').length
+  const count = (predicate: (status: string) => boolean) => items.filter(item => predicate(item.report.status)).length
+  const waitingCount = count(status => status !== 'uploaded' && status !== 'needs_attention')
+  const attentionCount = count(status => status === 'needs_attention')
+  const uploadedCount = count(status => status === 'uploaded')
   const today = new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })
 
   return (
@@ -52,7 +57,7 @@ const Dashboard = ({ navigation }: RootStackScreenProps<typeof ROUTES.DASHBOARD>
           <AppView row style={styles.connection}>
             <AppView style={[styles.dot, { backgroundColor: isOnline ? colors.success : colors.warning }]} />
             <AppText style={styles.connectionText}>
-              {isOnline ? (isSyncing ? 'Online · Syncing' : 'Online') : 'Offline mode'}
+              {isOnline ? (isRunning ? 'Network available · uploading' : 'Network available') : 'No network'}
             </AppText>
           </AppView>
         </AppView>
@@ -68,33 +73,45 @@ const Dashboard = ({ navigation }: RootStackScreenProps<typeof ROUTES.DASHBOARD>
               <AppView flex>
                 <AppText style={styles.actionTitle}>New Field Report</AppText>
                 <AppText style={styles.actionText}>
-                  Add a description and photos. Reports are saved offline and sync automatically.
+                  Add a description and photos. Reports are saved on this device first and upload automatically.
                 </AppText>
               </AppView>
             </AppView>
-            <AppButton title="Upload Report" onPress={() => navigation.navigate(ROUTES.UPLOAD_REPORT)} />
+            <AppButton title="New report" onPress={() => navigation.navigate(ROUTES.UPLOAD_REPORT)} />
           </AppView>
+
+          <AppView row style={styles.linksRow}>
+            <TouchableOpacity style={styles.linkButton} onPress={() => navigation.navigate(ROUTES.REVIEW)} accessibilityRole="button">
+              <MaterialDesignIcons name="cloud-search-outline" size={20} color={colors.primary} />
+              <AppText style={styles.linkText}>Server reports</AppText>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.linkButton} onPress={confirmResetLocalData} accessibilityRole="button">
+              <MaterialDesignIcons name="delete-sweep-outline" size={20} color={colors.error} />
+              <AppText style={[styles.linkText, { color: colors.error }]}>Reset local data</AppText>
+            </TouchableOpacity>
+          </AppView>
+          {__DEV__ && (
+            <TouchableOpacity style={styles.devLink} onPress={() => navigation.navigate(ROUTES.DEV_TOOLS)} accessibilityRole="button">
+              <AppText style={styles.devLinkText}>Dev: failure simulation</AppText>
+            </TouchableOpacity>
+          )}
 
           <AppText style={styles.sectionTitle}>Overview</AppText>
           <AppView row style={styles.statsRow}>
-            <StatCard icon="clock-outline" label="Pending" value={pendingCount} color={colors.primary} />
-            <StatCard icon="alert-circle-outline" label="Failed" value={failedCount} color={colors.error} />
-            <StatCard
-              icon={isOnline ? 'cloud-check-outline' : 'cloud-off-outline'}
-              label="Status"
-              value={isOnline ? 'Online' : 'Offline'}
-              color={isOnline ? colors.success : colors.warning}
-            />
+            <StatCard icon="clock-outline" label="Waiting" value={waitingCount} color={colors.primary} />
+            <StatCard icon="alert-circle-outline" label="Attention" value={attentionCount} color={colors.error} />
+            <StatCard icon="cloud-check-outline" label="Uploaded" value={uploadedCount} color={colors.success} />
           </AppView>
 
-          {reports.length === 0 ? (
+          <AppText style={styles.sectionTitle}>Outbox (this device)</AppText>
+          {items.length === 0 ? (
             <AppView center style={styles.emptyState}>
-              <MaterialDesignIcons name="check-circle-outline" size={36} color={colors.success} />
-              <AppText style={styles.emptyTitle}>All caught up</AppText>
-              <AppText style={styles.emptyText}>Every report has been uploaded.</AppText>
+              <MaterialDesignIcons name="tray" size={36} color={colors.textLight} />
+              <AppText style={styles.emptyTitle}>Outbox is empty</AppText>
+              <AppText style={styles.emptyText}>Reports you save appear here with their upload state.</AppText>
             </AppView>
           ) : (
-            <PendingUploads />
+            <Outbox items={items} />
           )}
         </AppView>
       </ScrollView>

@@ -1,0 +1,52 @@
+rules_version = '2';
+
+// Server-side validation for field reports. Mirrors src/delivery/limits.ts.
+// A report document is the "finalize" step: it can be created once and never changed, which
+// makes the client UUID (the document ID) a server-enforced idempotency key.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function validImage(reportId, image) {
+      return image is map
+        && image.keys().hasAll(['imageId', 'path', 'url', 'sizeBytes', 'mimeType', 'width', 'height'])
+        && image.keys().hasOnly(['imageId', 'path', 'url', 'sizeBytes', 'mimeType', 'width', 'height'])
+        && image.imageId is string && image.imageId.matches('^[0-9a-f-]{36}$')
+        && image.path == 'reports/' + reportId + '/' + image.imageId + '.jpg'
+        && image.url is string
+        && image.sizeBytes is int && image.sizeBytes > 0 && image.sizeBytes <= 5 * 1024 * 1024
+        && image.mimeType == 'image/jpeg'
+        && image.width is int && image.height is int;
+    }
+
+    // Rules have no loops, so each of the (at most five) positions is checked explicitly
+    function validImages(reportId, images) {
+      return images is list && images.size() >= 1 && images.size() <= 5
+        && validImage(reportId, images[0])
+        && (images.size() < 2 || validImage(reportId, images[1]))
+        && (images.size() < 3 || validImage(reportId, images[2]))
+        && (images.size() < 4 || validImage(reportId, images[3]))
+        && (images.size() < 5 || validImage(reportId, images[4]));
+    }
+
+    function validReport(reportId, data) {
+      return data.keys().hasAll(['clientReportId', 'description', 'imageCount', 'images', 'reportedAt', 'createdAt'])
+        && data.keys().hasOnly(['clientReportId', 'description', 'imageCount', 'images', 'reportedAt', 'createdAt'])
+        && data.clientReportId == reportId
+        && data.description is string
+        && data.description.trim().size() > 0
+        && data.description.size() <= 5000
+        && data.imageCount is int
+        && data.imageCount == data.images.size()
+        && validImages(reportId, data.images)
+        && data.reportedAt is int
+        && data.createdAt == request.time;
+    }
+
+    match /reports/{reportId} {
+      // No login in this test app: anyone with the app config can read and create reports
+      allow read: if true;
+      allow create: if reportId.matches('^[0-9a-f-]{36}$') && validReport(reportId, request.resource.data);
+      // Finalized reports are immutable; a retried create is resolved by the client transaction
+      allow update, delete: if false;
+    }
+  }
+}
