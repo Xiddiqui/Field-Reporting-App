@@ -3,6 +3,13 @@
   "compilerOptions": {
     "experimentalDecorators": true
   },
-  "include": ["**/*.ts", "**/*.tsx"],
-  "exclude": ["**/node_modules", "**/Pods"]
+  "include": [
+    "**/*.ts",
+    "**/*.tsx"
+  ],
+  "exclude": [
+    "**/node_modules",
+    "**/Pods",
+    "firebase"
+  ]
 }
