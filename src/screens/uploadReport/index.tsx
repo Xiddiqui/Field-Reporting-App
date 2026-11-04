@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { Alert, AppState, Image, Linking, ScrollView, TouchableOpacity } from 'react-native'
+import NetInfo from '@react-native-community/netinfo'
 import { Asset, ImagePickerResponse, launchCamera, launchImageLibrary } from 'react-native-image-picker'
 import { MaterialDesignIcons } from '@react-native-vector-icons/material-design-icons/static'
 import { AppButton, AppContainer, AppText, AppTextInput, AppView, ImagePickerModal, NetworkBanner } from '../../components'
@@ -110,7 +111,11 @@ const UploadReport = ({ navigation }: RootStackScreenProps<typeof ROUTES.UPLOAD_
             await saveReportLocally(description, images)
             triggerProcessingAndDelivery()
             navigation.goBack()
-            Alert.alert('Saved on this device', 'Waiting to upload. It will upload automatically when a connection is available. Track it in the Outbox.')
+            // Only tell the user it is waiting when there is no network; online uploads start right away
+            const network = await NetInfo.fetch()
+            if (network.isConnected === false) {
+                Alert.alert('Saved on this device', 'Waiting to upload. It will upload automatically when a connection is available. Track it in the Outbox.')
+            }
         } catch (error) {
             Alert.alert('Not saved', `${error instanceof Error ? error.message : 'Something went wrong'}\n\nYour report was not stored. Please try again.`)
         } finally {

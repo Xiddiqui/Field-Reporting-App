@@ -16,21 +16,35 @@ The goal: **deliver every submitted report exactly once, with every image intact
 
 ## Contents
 
+**The six things the brief asks the README to cover:**
+
+| Brief asks for | Section |
+|---|---|
+| How to run it | [Prerequisites](#prerequisites) · [Build and run (Android)](#build-and-run-android) |
+| How to stand up your backend | [Backend (Firebase)](#backend-firebase) · [Setting up your own project](#setting-up-your-own-project) |
+| How to make it fail | [How to make it fail](#how-to-make-it-fail) |
+| The decisions you made and why | [Decisions and why](#decisions-and-why) |
+| What you'd do with another day | [With another day](#with-another-day) |
+| What you knowingly left out | [What I knowingly left out](#what-i-knowingly-left-out) · [Known limitations](#known-limitations) |
+
+**Full contents:**
+
 1. [Requirements status](#requirements-status)
 2. [Prerequisites](#prerequisites)
 3. [Build and run (Android)](#build-and-run-android)
 4. [Backend (Firebase)](#backend-firebase)
 5. [Pointing the app at a backend (emulator or physical device)](#pointing-the-app-at-a-backend)
-6. [Failure simulation (development only)](#failure-simulation-development-only)
-7. [Architecture](#architecture)
-8. [Image pipeline and byte limit](#image-pipeline-and-byte-limit)
-9. [Queue, retries, timeouts and idempotency](#queue-retries-timeouts-and-idempotency)
-10. [Reset](#reset)
-11. [Tests](#tests)
-12. [Manual acceptance checklist](#manual-acceptance-checklist)
-13. [Known limitations](#known-limitations)
-14. [With another day](#with-another-day)
-15. [Screen recording](#screen-recording)
+6. [How to make it fail](#how-to-make-it-fail)
+7. [Decisions and why](#decisions-and-why)
+8. [Architecture](#architecture)
+9. [Image pipeline and byte limit](#image-pipeline-and-byte-limit)
+10. [Queue, retries, timeouts and idempotency](#queue-retries-timeouts-and-idempotency)
+11. [Reset](#reset)
+12. [Tests](#tests)
+13. [Manual acceptance checklist](#manual-acceptance-checklist)
+14. [What I knowingly left out](#what-i-knowingly-left-out)
+15. [Known limitations](#known-limitations)
+16. [With another day](#with-another-day)
 
 ---
 
@@ -43,12 +57,12 @@ The goal: **deliver every submitted report exactly once, with every image intact
 | Upload logic testable without React | ✅ `src/delivery/uploadWorker.ts` has no React or React Native imports. 15 worker tests run in plain Jest |
 | Description required, 1–5 photos, camera + gallery | ✅ Checked in the UI (`validateReport`) and again by the server rules |
 | Every uploaded image ≤ 5 MB; large photos compressed, not rejected | ✅ Bounded compression steps, measured on disk, enforced again in Storage rules |
-| Persist locally before saying "saved" | ✅ Rows and photo copies are committed before the "Saved on this device — waiting to upload" message |
+| Persist locally before saying "saved" | ✅ Rows and photo copies are committed before the screen closes and before any "Saved on this device" message |
 | Resume after reconnect and after reopening | ✅ NetInfo, AppState and launch triggers. Retry times are stored in SQLite |
 | No duplicate reports or images on retry | ✅ Client UUID is the document ID, a create-if-absent transaction, deterministic image keys, immutable reports |
 | Review fetches from the server only | ✅ `getDocsFromServer`; a fetch error and an empty list are shown differently |
 | Deliberate Reset with documented scope | ✅ See [Reset](#reset) |
-| README, real incremental Git history, 2–3 min recording | README ✅ · Git history: see the log · **Recording: still to be added** (see [Screen recording](#screen-recording)) |
+| README, real incremental Git history, 2–3 min recording | README ✅ · Git history: see the log · Recording: submitted separately |
 
 ---
 
@@ -143,7 +157,23 @@ There is no base URL to configure. React Native Firebase reads the project from 
 
 ---
 
-## Failure simulation (development only)
+## How to make it fail
+
+There are two ways: real-world conditions on the device, and a built-in failure simulator for the cases you can't produce on demand (a lost response, a 503, a hang).
+
+### Real-world conditions (no code needed)
+
+| Do this | Expected behaviour |
+|---|---|
+| Turn on **airplane mode**, then save reports | Saved locally; Outbox shows *Waiting for connection*. Turn it off and they upload by themselves |
+| **Force-quit** (swipe away) while *Preparing photos* or *Uploading*, then reopen | Nothing lost. Processing resumes from the kept originals; an interrupted upload is rescheduled immediately |
+| **Throttle the network** (emulator: *Extended controls → Cellular → Network type EDGE/GPRS*) | Slow but steady progress; the 30 s inactivity timeout does not fire while bytes are moving |
+| Toggle Wi-Fi **mid-upload** | In-flight request is aborted, then retried with the same key when back online |
+| Pick a **huge photo** (48 MP, > 5 MB) | Compressed in steps until ≤ 5 MiB, never rejected |
+| Deploy **stricter rules** or point at a project **without rules deployed** | `permission` error → *Needs attention*, not retried forever |
+| Run `npm run test:backend` | Emulator tests send duplicates, oversize images, blank descriptions, overwrites, and check they're rejected or deduplicated |
+
+### Failure simulation (development only)
 
 Debug builds (`__DEV__`) wrap the real API in [`src/api/failureSimulation.ts`](src/api/failureSimulation.ts). It is **off by default** and **left out of release builds**: the wrapper is only applied when `__DEV__` is true, and the screen is only registered in debug builds.
 
@@ -162,6 +192,30 @@ Open it from **Dashboard → "Dev: failure simulation"** and choose:
 You can also choose **what it applies to** (any request, image upload, finalize, or the Review fetch) and **how many** requests it affects (next 1, next 2, or every request until turned off). "Next 2 requests" on *Image upload* reproduces "drop the connection twice mid-upload".
 
 To check what the server actually stores, use the Firebase console (Firestore → `reports`, Storage → `reports/{id}/`) or the app's Review screen. Each document's `images[].sizeBytes` is the size the server measured.
+
+---
+
+## Decisions and why
+
+| Decision | Why | Trade-off accepted |
+|---|---|---|
+| **Firebase (Firestore + Storage) instead of an Express server** | No server to host or keep alive for reviewers; security rules give server-side validation and immutability; the emulator suite makes the backend testable in CI | Finalize can't verify Storage objects server-side without a Cloud Function (see [Known limitations](#known-limitations)) |
+| **Client-generated UUID is the idempotency key *and* the document ID** | Uniqueness is enforced by the database itself, not by a lookup that could race. A retry after a lost response lands on the same document | The client must never regenerate the ID; it is persisted before the first attempt |
+| **Create-if-absent transaction + rules that forbid update/delete** | Makes "commit then lose response" safe: the retry resolves the existing report instead of creating or overwriting one | Reports are immutable; editing would need a new design |
+| **Deterministic image keys** (`reports/{uuid}/{imageId}.jpg`) | Re-uploading replaces an object instead of adding a duplicate | An object can be replaced until the report is finalized (then rules freeze it) |
+| **SQLite via WatermelonDB as the outbox** | Durable, transactional, observable from React; survives force-quit. Retry times live in the DB, not in memory timers | Native dependency plus a small `patch-package` patch |
+| **Upload worker is plain TypeScript behind interfaces** | Testable in Jest without React or a device; the UI only observes state and never owns upload logic | A little more wiring (`deliveryService`) to connect triggers to the worker |
+| **Durable lease when claiming a report** | Overlapping triggers (NetInfo + foreground + timer) can't upload the same report twice; an expired lease recovers after a crash | Lease is device-local only, which is fine since a report never leaves its device |
+| **Always re-encode to JPEG and step down quality/size, measuring the file on disk** | The limit is about bytes on the wire, so it is checked on the actual file, not estimated. Bounded steps mean predictable CPU on low-end phones | Some quality loss on very large photos; HEIC/PNG are not preserved |
+| **5 MB = 5 MiB (5,242,880 bytes)**, defined once and mirrored in the rules | Removes ambiguity; tests check exactly the boundary and one byte over | — |
+| **Inactivity timeout (30 s) rather than a total timeout** | A slow 2G upload that keeps moving should not be killed; a hung one should | A very slow trickle could take a long time, but it is visibly progressing |
+| **Backoff 2 s → 30 s cap with ±25% jitter; honour `Retry-After` up to 5 min** | Recovers quickly from blips without hammering the server, and avoids thundering-herd retries | — |
+| **Validation/permission errors go to *Needs attention*, not retried** | Retrying a request that can never succeed wastes battery and hides a real problem | User must tap **Retry now** after the cause is fixed |
+| **Connectivity is a hint, not a gate** | `isInternetReachable` is often wrong; only `isConnected === false` skips an attempt and the request result decides | Occasional wasted attempt on captive networks |
+| **Review uses `getDocsFromServer` only** | The brief requires showing what the server has, never the local cache or outbox | Review doesn't work offline (and says so clearly) |
+| **"Uploaded" only after the server's canonical response is validated and stored locally** | The UI must never claim delivery it can't prove; the progress bar stops at 95% until then | — |
+| **Reset deletes local data only, and warns about un-uploaded reports** | Reset is a device-cleanup tool, not a server admin tool; losing unsent work must be an explicit choice | Abandoned images may remain in Storage |
+| **Failure simulator compiled into debug builds only** | Lets reviewers reproduce lost responses, 503s and hangs on demand, without any risk of shipping it | — |
 
 ---
 
@@ -273,7 +327,7 @@ Native resize and encode run on a native thread. JavaScript only holds paths, ne
 
 ### Persist before sending
 
-`saveReportLocally` copies the photos, then writes the report and image rows in one transaction with a fresh UUID. Only then does the UI say **"Saved on this device — waiting to upload."** No network call is involved.
+`saveReportLocally` copies the photos, then writes the report and image rows in one transaction with a fresh UUID. Only then does the compose screen close. If the device is offline it also says **"Saved on this device — waiting to upload."**; online, the upload starts right away and progress shows in the Outbox. No network call is involved in saving.
 
 ### Upload protocol (per report)
 
@@ -416,7 +470,7 @@ Run on an Android device or emulator against a Firebase project with the rules d
 - [ ] A large original (> 5 MB, e.g. a 48 MP photo) ends up ≤ 5,242,880 bytes (check `images[].sizeBytes` in Review or the console).
 
 **Offline durability**
-- [ ] Turn on airplane mode. Create three reports, one with five camera photos. Each shows "Saved on this device — waiting to upload", then *Preparing photos* → *Waiting for connection*.
+- [ ] Turn on airplane mode. Create three reports, one with five camera photos. Each shows "Saved on this device", then *Preparing photos* → *Waiting for connection* in the Outbox.
 - [ ] Force-quit (swipe away) and reopen: all three are still in the Outbox with their photos. None reads "Uploaded".
 
 **Delivery and duplicate prevention**
@@ -439,6 +493,22 @@ Run on an Android device or emulator against a Firebase project with the rules d
 - [ ] After Reset, Review still lists the uploaded reports, and `pending-uploads/` is empty (`adb shell run-as com.fieldreportingapp ls files/pending-uploads/*`).
 
 ---
+
+## What I knowingly left out
+
+These were deliberate scope cuts, not oversights:
+
+- **Authentication and per-user data.** The brief says no login, so rules allow unauthenticated reads and creates. Not production-safe.
+- **An Express/Node backend.** Replaced by Firebase; see [Decisions and why](#decisions-and-why).
+- **A server-side finalize function.** Image existence is checked by the client (`getMetadata`) before finalize; the rules check shape, size and paths. A Cloud Function would close this gap.
+- **Background uploads (WorkManager / headless JS).** Uploads run while the app is alive, and resume on launch or foreground. Nothing is lost, but a report may wait until the app is opened.
+- **Resumable uploads across restarts.** A dropped upload restarts that image from zero (each image is ≤ 5 MiB, usually 0.5–2 MB).
+- **Editing or deleting reports** after submission. Reports are immutable on the server by design.
+- **Deleting server data** (from Reset or anywhere else), and cleanup of orphaned Storage objects from discarded reports.
+- **Pagination in Review** — it shows the latest 100.
+- **iOS testing.** The code is cross-platform but only Android was built and tested.
+- **End-to-end UI tests** (Detox/Maestro). Logic is covered by 52 unit tests and 18 backend emulator tests; UI flows are covered by the [manual checklist](#manual-acceptance-checklist).
+- **Wiring the app to the local Firebase emulators.** Only the backend tests use them; the app talks to the cloud project.
 
 ## Known limitations
 
@@ -463,16 +533,3 @@ Run on an Android device or emulator against a Firebase project with the rules d
 
 ---
 
-## Screen recording
-
-> **TODO (author):** add the link to the 2–3 minute recording here.
-
-Suggested outline:
-1. Empty outbox.
-2. Airplane mode on; create three reports, one with five camera photos.
-3. Show "Saved locally / Waiting for connection".
-4. Force-quit and reopen; the reports remain.
-5. Throttled network; Dev tools → *Commit, then lose response*.
-6. Automatic retry and recovery.
-7. Review lists the reports from the server.
-8. Firebase console: one document per report, images ≤ 5 MiB.
