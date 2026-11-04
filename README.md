@@ -81,14 +81,9 @@ npm install
 ```
 
 ```bash
-npm start
+npx react-native run-android
 ```
 
-In a second terminal:
-
-```bash
-npm run android
-```
 
 To build a release APK:
 
